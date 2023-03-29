@@ -18,7 +18,6 @@ runs:
         TF_WORKSPACE: "${{ steps.workspace.outputs.stdout }}"
         CUSTOM_TITLE: "${{ inputs.pr-comment-title }}"
       with:
-        github-token: ${{ inputs.github-token }}
         script: |
           if (!context || !context.issue || !context.issue.number) {
             return;
