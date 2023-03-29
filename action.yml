@@ -3,95 +3,14 @@ description: 'GitHub Action for adding `terraform plan` output as a PR comment'
 branding:
   icon: 'package'
   color: 'blue'
-inputs:
-  github-token:
-    description: "GitHub token for commenting on PRs. Defaults to using 'secrets.GITHUB_TOKEN'"
-    required: false
-    default: ${{ github.token }}
-  apply-branch:
-    description: "Branch to run `terraform apply` on. Leave blank to disable auto-apply."
-    required: false
-    default: ""
-  path:
-    description: "Path to the Terraform configuration. Defaults to '.' if not specified."
-    required: false
-    default: "."
-  pr-comment-title:
-    description: "Custom title for the PR comment. Defaults to '${TF_WORKSPACE}' if not specified."
-    required: false
-    default: ""
-  lock-for-plan:
-    description: "Should we use a workspace lock for the `terraform plan`? https://www.terraform.io/language/state/locking"
-    required: false
-    default: true
-  require-formatting:
-    description: "Should we require the terraform formatting check?"
-    required: false
-    default: false
-  require-validate:
-    description: "Should we require the terraform validate check?"
-    required: false
-    default: true
 runs:
   using: "composite"
   steps:
-    - name: Terraform Format
-      id: fmt
-      shell: bash
-      run: |
-        cd ${{ inputs.path }}
-        if terraform fmt -recursive -check; then
-          echo "fmt-outcome=success" >> $GITHUB_OUTPUT
-        else
-          echo "fmt-outcome=failure" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Terraform Init
-      id: init
-      shell: bash
-      run: |
-        cd ${{ inputs.path }}
-        if terraform init; then
-          echo "init-outcome=success" >> $GITHUB_OUTPUT
-        else
-          echo "init-outcome=failure" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Terraform Workspace
-      id: workspace
-      shell: bash
-      run: |
-        cd ${{ inputs.path }}
-        if terraform workspace show; then
-          echo "workspace-outcome=success" >> $GITHUB_OUTPUT
-        else
-          echo "workspace-outcome=failure" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Terraform Validate
-      id: validate
-      shell: bash
-      run: |
-        cd ${{ inputs.path }}
-        if terraform validate -no-color; then
-          echo "validate-outcome=success" >> $GITHUB_OUTPUT
-        else
-          echo "validate-outcome=failure" >> $GITHUB_OUTPUT
-        fi
-
     - name: Terraform Plan
       id: plan
       shell: bash
       run: |
-        if [[ '${{ github.ref }}' != 'refs/heads/${{ inputs.apply-branch }}' ]]; then
-          cd ${{ inputs.path }}
-          if $TERRAFORM_CLI_PATH/terraform-bin plan -no-color -lock-timeout=60s -lock=${{ inputs.lock-for-plan }} > ${GITHUB_WORKSPACE}/plan.out 2>&1; then
-            echo "plan-outcome=success" >> $GITHUB_OUTPUT
-          else
-            echo "plan-outcome=failure" >> $GITHUB_OUTPUT
-          fi
-          cat ${GITHUB_WORKSPACE}/plan.out
-        fi
+        terraform plan -no-color 2>&1 | tee ${GITHUB_WORKSPACE}/plan.out
 
     - name: Create/Update Comment
       uses: actions/github-script@v6

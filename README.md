@@ -2,12 +2,14 @@
 
 GitHub Action for adding `terraform plan` output as a PR comment.
 
-**[Shut up and show me the copy/paste](#examples)**
 
 ## Usage
 
-This action can be used as follows:
+You must sent `on: pullrequest` or else the GitHub workflow will not have all the metadata required for posting back.
+
 ```yaml
+on: pullrequest
+[[[ SNIP ]]]
       - uses: tchupp/actions-terraform-pr@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -38,57 +40,9 @@ The following snippet from an example job, [which can be found below](#simple-se
 ...
 ```
 
-#### Terraform Workspaces
-
-Some teams choose to have multiple sets of terraform configuration in one git repository.  
-Let's say your repo looked like this:
-```bash
-$ tree
-.
-├── aws-route53
-│   ├── main.tf
-│   └── versions.tf
-└── aws-vpc
-    ├── main.tf
-    └── versions.tf
-
-2 directories, 4 files
-```
-
-If you had `development`, `staging`, and `production` workspaces for both sets of config files, you would have 6 workspaces total.
-
-This action expects that your terraform workspace is uniquely named, at least inside your repository.
-That means the workspace names would be:
-- `aws-route53-development`
-- `aws-route53-staging`
-- `aws-route53-production`
-- `aws-vpc-development`
-- `aws-vpc-staging`
-- `aws-vpc-production`
-
-This naming scheme is common when using a backend such as Terraform Cloud.
-
 ### Inputs
 
-#### github-token
-
-**Optional**. Uses to comment on PRs.  
-This will default to `${{ secrets.GITHUB_TOKEN }}` if omitted.
-
-#### apply-branch
-
-**Optional**. Set this to the default branch for your repo, ex `main` or `master`.  
-Leave blank to disable auto-apply.
-
-#### path
-
-**Optional**. Set this to the path to your terraform configuration files.  
-This will default to the top level directory if not specified.
-
-#### pr-comment-title
-
-**Optional**. Set this to specify a custom PR title.  
-This will default to '${TF_WORKSPACE}' if not specified.
+Assumes all the TF is in the root repo, for now.
 
 ## Examples
 
@@ -107,9 +61,6 @@ $ tree
 In your `.github/workflows/terraform.yml` file you would have:
 ```yaml
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
@@ -138,189 +89,10 @@ jobs:
           apply-branch: "main"
 ```
 
-### Single directory with a single workspace
+### Forked from tchupp/actions-terraform-pr
 
-This setup assumes you have your terraform files in a subdirectory in your repo, and you only have a single workspace:
-```bash
-$ tree
-.
-├── app
-│   ├── index.ts
-└── terraform
-    ├── main.tf
-    └── versions.tf
+I couldn't get the tcupp version to work, turns out I didn't set the `on: pull_request` in my workflow and a simple branch push wasn't enough.
 
-2 directories, 3 files
-```
+But if you need more features go check out: https://github.com/tchupp/actions-terraform-pr
 
-In your `.github/workflows/terraform.yml` file you would have:
-```yaml
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-    paths:
-      - '**.tf'
-      - '.github/workflows/terraform.yml'
-
-jobs:
-  terraform:
-    name: "Terraform"
-    runs-on: ubuntu-latest
-    env:
-      TF_WORKSPACE: "default"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: ~1.0.0
-          cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
-
-      - uses: tchupp/actions-terraform-pr@v1
-        with:
-          apply-branch: "main"
-          path: "terraform"
-```
-
-### Single directory with multiple workspaces
-
-This setup assumes you have your terraform files in a subdirectory in your repo, and you only have a single workspace:
-```bash
-$ tree
-.
-├── app
-│   ├── index.ts
-└── terraform
-    ├── main.tf
-    └── versions.tf
-
-2 directories, 3 files
-```
-
-In your `.github/workflows/terraform.yml` file you would have:
-```yaml
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-    paths:
-      - '**.tf'
-      - '.github/workflows/terraform.yml'
-
-jobs:
-  terraform:
-    name: "Terraform"
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        env:
-          - development
-          - staging
-          - production
-    env:
-      TF_WORKSPACE: "${{ matrix.env }}"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: ~1.0.0
-          cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
-
-      - uses: tchupp/actions-terraform-pr@v1
-        with:
-          apply-branch: "main"
-          path: "terraform"
-```
-
-### Manual Terraform Apply
-
-In some situations, you want to control the `terraform apply` yourself.
-
-In your `.github/workflows/terraform.yml` file you would have:
-```yaml
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-    paths:
-      - '**.tf'
-      - '.github/workflows/terraform.yml'
-
-jobs:
-  terraform:
-    name: "Terraform"
-    runs-on: ubuntu-latest
-    env:
-      TF_WORKSPACE: "default"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: ~1.0.0
-          cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
-
-      - uses: tchupp/actions-terraform-pr@v1
-
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main'
-        run: |
-          terraform apply -auto-approve
-```
-
-### Disable locking for `terraform plan`
-
-In some situations, you want to disabling workspace locking when running `terraform plan`.  
-This would be the equivalent of running `terraform plan -lock=false`: https://www.terraform.io/language/state/locking
-
-In your `.github/workflows/terraform.yml` file you would have:
-```yaml
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-    paths:
-      - '**.tf'
-      - '.github/workflows/terraform.yml'
-
-jobs:
-  terraform:
-    name: "Terraform"
-    runs-on: ubuntu-latest
-    env:
-      TF_WORKSPACE: "default"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: ~1.0.0
-          cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
-
-      - uses: tchupp/actions-terraform-pr@v1
-        with:
-          apply-branch: "main"
-          lock-for-plan: false
-```
+For now, this forked action will stand as a dead simple alternative.
