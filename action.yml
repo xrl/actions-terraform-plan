@@ -3,12 +3,18 @@ description: 'GitHub Action for adding `terraform plan` output as a PR comment'
 branding:
   icon: 'package'
   color: 'blue'
+inputs:
+  working-directory:
+    description: 'Directory to run terraform plan in'
+    required: false
+    default: '.'
 runs:
   using: "composite"
   steps:
     - name: Terraform Plan
       id: plan
       shell: bash
+      working-directory: ${{ inputs.working-directory }}
       run: |
         terraform plan -no-color 2>&1 | tee ${GITHUB_WORKSPACE}/plan.out
 
