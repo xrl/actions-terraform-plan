@@ -8,6 +8,10 @@ inputs:
     description: 'Directory to run terraform plan in'
     required: false
     default: '.'
+  pr-comment-title:
+    description: 'Custom title for the PR comment (useful for monorepos)'
+    required: false
+    default: 'Terraform Plan'
 runs:
   using: "composite"
   steps:
@@ -16,24 +20,32 @@ runs:
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: |
+        set -o pipefail
         terraform plan -no-color 2>&1 | tee ${GITHUB_WORKSPACE}/plan.out
 
     - name: Create/Update Comment
-      uses: actions/github-script@v6
-      env:
-        TF_WORKSPACE: "${{ steps.workspace.outputs.stdout }}"
-        CUSTOM_TITLE: "${{ inputs.pr-comment-title }}"
+      uses: actions/github-script@v7
       with:
         script: |
           const fs = require('fs');
           const raw_plan = fs.readFileSync('plan.out', 'utf8');
-          const commentTitle = `Terraform Plan`;
-          const commentContent = `
-          ${commentTitle}
-          \`\`\`
-          ${raw_plan}
-          \`\`\`
-          `;
+          const commentTitle = `${{ inputs.pr-comment-title }}`;
+          
+          // GitHub comment limit is 65535 characters
+          const maxLength = 60000;
+          let planOutput = raw_plan;
+          let truncated = false;
+          
+          if (planOutput.length > maxLength) {
+            planOutput = planOutput.substring(0, maxLength);
+            truncated = true;
+          }
+          
+          let commentContent = `${commentTitle}\n\`\`\`\n${planOutput}\n\`\`\``;
+          
+          if (truncated) {
+            commentContent += `\n\n⚠️ **Output truncated** - plan output exceeded ${maxLength} characters. See workflow logs for full output.`;
+          }
           
           const comments = await github.rest.issues.listComments({
             issue_number: context.issue.number,
