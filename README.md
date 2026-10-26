@@ -40,6 +40,10 @@ The following snippet from an example job, [which can be found below](#simple-se
 ...
 ```
 
+### PR comment
+
+The comment opens with a one-line summary, the `Plan:` line or `No changes.`, marked ✅, ⚠️ (resources destroyed or replaced, or warnings) or ❌ (plan failed). Errors, replaced or destroyed resources and warnings are listed under it. The full plan sits in a collapsed "Full plan" section.
+
 ### Inputs
 
 Assumes all the TF is in the root repo, for now.

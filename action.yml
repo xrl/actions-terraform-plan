@@ -24,40 +24,73 @@ runs:
         terraform plan -no-color 2>&1 | tee ${GITHUB_WORKSPACE}/plan.out
 
     - name: Create/Update Comment
+      # Also runs when the plan fails, so the PR shows the error.
+      if: ${{ !cancelled() }}
       uses: actions/github-script@v7
       with:
         script: |
           const fs = require('fs');
           const raw_plan = fs.readFileSync('plan.out', 'utf8');
           const commentTitle = `${{ inputs.pr-comment-title }}`;
-          
+          const failed = `${{ steps.plan.outcome }}` === 'failure';
+
+          // Lines a reviewer should see without expanding the plan.
+          const lines = raw_plan.split('\n').map(l => l.replace(/^[│╷╵]\s?/, ''));
+          const planLine = lines.find(l => /^(Plan: |No changes\.|Changes to Outputs:)/.test(l));
+          const errors = lines.filter(l => /^Error: /.test(l));
+          const warnings = [...new Set(lines.filter(l => /^Warning: /.test(l)))];
+          const risky = lines
+            .filter(l => /^\s*# \S.* (must be replaced|will be destroyed|will be replaced)/.test(l))
+            .map(l => l.trim().replace(/^# /, ''));
+          const destroys = /(\d+) to destroy/.exec(planLine || '');
+
+          let icon = '✅';
+          if (risky.length || (destroys && destroys[1] !== '0') || warnings.length) icon = '⚠️';
+          if (failed || errors.length) icon = '❌';
+
+          let summary = `**${commentTitle}** ${icon} ${planLine || (failed ? 'Plan failed.' : 'No plan summary found.')}`;
+          const notes = [
+            ...errors,
+            ...risky.map(r => `\`${r.split(' ')[0]}\` ${r.slice(r.indexOf(' ') + 1)}`),
+            ...warnings,
+          ];
+          const maxNotes = 20;
+          if (notes.length) {
+            summary += '\n\n' + notes.slice(0, maxNotes).map(n => `- ${n}`).join('\n');
+            if (notes.length > maxNotes) summary += `\n- …and ${notes.length - maxNotes} more`;
+          }
+
           // GitHub comment limit is 65535 characters
           const maxLength = 60000;
           let planOutput = raw_plan;
           let truncated = false;
-          
+
           if (planOutput.length > maxLength) {
             planOutput = planOutput.substring(0, maxLength);
             truncated = true;
           }
-          
-          let commentContent = `${commentTitle}\n\`\`\`\n${planOutput}\n\`\`\``;
-          
+
+          // A fence longer than any backtick run in the plan, so the plan can't close it.
+          const longestRun = Math.max(2, ...(planOutput.match(/`+/g) || []).map(r => r.length));
+          const fence = '`'.repeat(longestRun + 1);
+
+          let commentContent = `${summary}\n\n<details><summary>Full plan</summary>\n\n${fence}\n${planOutput}\n${fence}\n\n</details>`;
+
           if (truncated) {
             commentContent += `\n\n⚠️ **Output truncated** - plan output exceeded ${maxLength} characters. See workflow logs for full output.`;
           }
-          
+
           const comments = await github.rest.issues.listComments({
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
           });
-          
+
           const githubActionsBotComment = comments.data.find(comment =>
             comment.user.login === 'github-actions[bot]' &&
              comment.body.includes(commentTitle)
           );
-          
+
           if (githubActionsBotComment) {
             await github.rest.issues.updateComment({
               comment_id: githubActionsBotComment.id,
